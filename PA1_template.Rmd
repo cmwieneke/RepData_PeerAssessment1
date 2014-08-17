@@ -2,7 +2,7 @@
 
 
 ## Loading and preprocessing the data
-```{r,message=FALSE}
+```{r,message=FALSE,, warning=FALSE}
 require(data.table)
 require(ggplot2)
 stepdata <- fread("activity.csv")
@@ -11,15 +11,127 @@ stepdata$date <- as.Date(stepdata$date)
 
 
 ## What is mean total number of steps taken per day?
+```{r, echo=FALSE, results='hide', warning=FALSE }
+
+forplot <- as.data.table(stepdata[,lapply(.SD, function(x) sum(x, na.rm = TRUE)), by = "date", .SDcols = 1])
+
+histog <- with(forplot,qplot(date,steps, stat = "identity", geom = "histogram"))
+
+avg <- mean(forplot$steps)
+med <- median(forplot$steps)
+
+```
+
+```{r, echo=FALSE}
+
+print(histog)
+
+```
+
+The mean number of steps per day is `r avg` and the median number of steps per day is `r med`.
+
 
 
 
 ## What is the average daily activity pattern?
+```{r, echo=FALSE, results='hide', warning=FALSE}
+forplot2 <- as.data.table(stepdata[,lapply(.SD, function(x) mean(x, na.rm = TRUE)), by = "interval", .SDcols = 1])
+
+line1 <- with(forplot2,qplot(interval, steps, geom = "line"))
+
+maxinter <- forplot2$interval[which.max(forplot2$steps)]
+```
+
+```{r, echo=FALSE}
+
+print(line1)
+
+```
+
+
+The 5-minute interval, on average across all days that contains the maximum number of steps is `r maxinter`.
 
 
 
 ## Imputing missing values
 
+```{r, echo=FALSE, results='hide', warning=FALSE}
 
+nas <- stepdata[!complete.cases(stepdata),.N]
+
+```
+
+The number of rows containg NAs, incomplete cases, is `r nas`.
+
+
+To replace the missing data, I have decided to replace it with median rather than mean data.  Numbers based on the mean could be skewed by some abnormally high activity during any given 5-minute interval.  Median is not perfect, but is more likely to match the "typical" 5-minute interval.  Code below.
+
+```{r, results='hide', warning=FALSE}
+stepdata2 <- stepdata
+replaceNAs <- as.data.table(stepdata2[,lapply(.SD, function(x) median(x, na.rm = TRUE)), by = "interval", .SDcols = 1])
+stepdata2 <- merge(stepdata2, replaceNAs, by = "interval", all.x = TRUE)
+sub <- subset(stepdata2, is.na(steps.x))
+sub$steps.x <- sub$steps.y 
+stepdata2 <- subset(stepdata2, !is.na(steps.x))
+stepdata2 <- rbind(stepdata2, sub)
+setnames(stepdata2, "steps.x", "steps")
+stepdata2$steps.y <- NULL
+```
+
+```{r, echo=FALSE, results='hide', warning=FALSE }
+
+forplot3 <- as.data.table(stepdata2[,lapply(.SD, function(x) sum(x, na.rm = TRUE)), by = "date", .SDcols = 2])
+
+histog2 <- with(forplot3,qplot(date,steps, stat = "identity", geom = "histogram"))
+
+avg2 <- mean(forplot3$steps)
+med2 <- median(forplot3$steps)
+
+avgchange <- avg2-avg
+medchange <- med2-med
+
+
+```
+
+```{r, echo=FALSE}
+
+print(histog2)
+
+```
+
+```{r, echo=FALSE, results='hide', warning=FALSE }
+
+forplot4 <- merge(forplot, forplot3,by = "date")
+forplot4$stepsdiff <- forplot4$steps.y -  forplot4$steps.x
+
+histog3 <- with(forplot4,qplot(date,stepsdiff, stat = "identity", geom = "histogram"))
+
+```
+
+The new mean number of steps per day is `r avg` and the new median number of steps per day is `r med`.  The change to the mean is `r avgchange` steps and the change to the median is `r medchange` steps.  The impact of inputing missing is an increase to the total daily number of steps.  See below.
+
+```{r, echo=FALSE}
+
+print(histog3)
+
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+
+```{r, echo=FALSE, results='hide', warning=FALSE }
+stepdata2$daytype <- weekdays(stepdata2$date)
+stepdata2$daytype[stepdata2$daytype == "Sunday"] <- "Weekend"
+stepdata2$daytype[stepdata2$daytype == "Saturday"] <- "Weekend"
+stepdata2$daytype[stepdata2$daytype != "Weekend"] <- "Weekday"
+stepdata2$daytype <- as.factor(stepdata2$daytype)
+
+line2 <- qplot(interval, steps,data = stepdata2, stat="summary", fun.y="mean", geom = "line") + facet_wrap(~daytype, nrow=2)
+
+```
+
+```{r, echo=FALSE}
+
+print(line2)
+
+
